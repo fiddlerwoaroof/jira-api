@@ -1,31 +1,7 @@
 ;;;; jira-api.lisp
+(declaim (optimize (debug 3)))
 
 (in-package #:jira-api)
-
-;;; "jira-api" goes here. Hacks and glory await!
-
-; curl -u user:password https://atomampd.atlassian.net/rest/api/2/issue/ATOMOS-212 | jq .
-(defparameter *endpoint* "https://socraticum.atlassian.net/rest/api/2/")
-
-(defun api-get-call (auth method &rest parameters)
-  "Connect to a GET REST endpoint specified by method and return a stream from
-   which the response can be read."
-  (let ((drakma:*text-content-types* (acons "application" "json" drakma:*text-content-types*)))
-    (drakma:http-request (puri:merge-uris method *endpoint*)
-                         :parameters (alexandria:plist-alist parameters)
-                         :basic-authorization auth
-                         :want-stream t)))
-
-(defun api-post-call (auth method post-data)
-  "Connect to a GET REST endpoint specified by method and return a stream from
-   which the response can be read."
-  (let ((drakma:*text-content-types* (acons "application" "json" drakma:*text-content-types*)))
-    (drakma:http-request (puri:merge-uris method *endpoint*)
-                         :method :POST
-                         :content-type "application/json"
-                         :content post-data
-                         :basic-authorization auth
-                         :want-stream t)))
 
 (defun get-issues (auth)
   (api-get-call auth "search"))
@@ -80,30 +56,8 @@
              (when description
                (list description))))))
 
-(deftype vector-of-objects () '(vector (or hash-table sheeple:object) *))
-
-(defun json2sheeple (json)
-  (labels
-    ((handle-parsed (parsed-json)
-       (typecase parsed-json
-         (vector-of-objects (map 'vector #'handle-parsed parsed-json))
-         (hash-table
-           (let ((result (sheeple:object)))
-             (loop for json-prop being the hash-keys of parsed-json using (hash-value json-value)
-                   do (setf (sheeple:property-value result
-                                                    (intern (string-upcase json-prop) :jira-api))
-                            (typecase json-value
-                              (hash-table (handle-parsed json-value))
-                              (vector-of-objects (map 'vector #'handle-parsed json-value))
-                              (t json-value)))
-                   finally (return result))))
-         (t parsed-json))))
-    (let ((yason:*parse-json-arrays-as-vectors* t))
-      (handle-parsed (yason:parse json)))))
-
 (defun show-person (person title)
-  (sheeple:with-properties (displayname emailaddress) person
-    (format t "~&~4t~a: \"~a\" <~a>~%" title displayname emailaddress)))
+  (format t "~&~4t~a: ~a~%" title (show person)))
 
 (defun show-labels (labels)
   (format t "~&~4tLabels: ~{~a~}~%" (coerce labels 'list)))
@@ -137,69 +91,35 @@
       (princ #\space))))
 
 (defun classify-issues (sheeple-issues &optional (classify-by '(status name)))
-   (sheeple:with-properties (issues) sheeple-issues
-     (loop with classes = (make-hash-table :test 'equalp)
-           for issue across issues
-           do (sheeple:with-properties (fields) issue
-                (loop for classification in classify-by
-                      for thing = (sheeple:property-value fields classification)
-                          then (sheeple:property-value thing classification)
-                      finally (push issue (gethash thing classes))))
-           finally (return classes))))
+  (sheeple:with-properties (issues) sheeple-issues
+    (loop with classes = (make-hash-table :test 'equalp)
+          for issue across issues
+          do (loop for classification in classify-by
+                   for thing = (sheeple:property-value (fields issue) classification)
+                       then (sheeple:property-value thing classification)
+                   finally (push issue (gethash thing classes)))
+          finally (return classes))))
+
+(defun show-issue-short (issue)
+  (sheeple:with-properties (key self) issue
+    (let* ((fields (fields issue))
+           (status (name (status fields)))
+           (summary (summary fields)))
+      (format t "~&~a ~a (~a)~%" self key status)
+      (show-summary summary)
+      (fresh-line))))
 
 (defun show-issues (sheeple-issues)
   (sheeple:with-properties (issues) sheeple-issues
     (loop for issue across issues
+          do (ensure-parent issue =issue=)
           do (show-issue-short issue))))
 
-(defun show-issue-short (issue)
-  (sheeple:with-properties (key fields self) issue
-    (sheeple:with-properties (summary status) fields
-      (sheeple:with-properties ((status-name name)) status
-        (format t "~&~a ~a (~a)~%" self key status-name))
-      (show-summary summary)
-      (fresh-line))))
-
-(defun show-issue (issue)
-  (declare (optimize (debug 3)))
-  (sheeple:with-properties (fields key id self) issue
-    (sheeple:with-properties (summary description reporter creator assignee status labels) fields
-      (sheeple:with-properties ((status-name name)) status
-        (format t "~a (~a) <~a>~%" key status-name self))
-
-      (show-summary summary)
-
-      (show-person reporter "Reporter")
-      (show-person creator "Creator")
-      (when assignee
-        (show-person assignee "Assignee"))
-
-      (when (< 0 (length labels))
-        (show-labels labels))
-
-      (when description
-        (show-description description)))))
-
-(defun show-issuetype (issuetype)
-  (sheeple:with-properties (description name) issuetype
-    (pprint-logical-block (*standard-output* (tokens description))
-      (pprint-indent :block 15 *standard-output*)
-      (pprint-exit-if-list-exhausted)
-      (format *standard-output* "~4t~10@a: " name)
-      (loop
-        (princ (pprint-pop))
-        (pprint-exit-if-list-exhausted)
-        (pprint-newline :fill *standard-output*)
-        (princ #\space)))))
-
-(defun show-project (project)
-  (sheeple:with-properties (name key issuetypes) project
-    (format t "~a: ~a~%" key name)
-    (loop for issuetype across issuetypes
-          do (show-issuetype issuetype)
-          do (terpri))))
+(defun print-on-own-line (str)
+  (format t "~&~a~&" str))
 
 (defun show-projects (projects)
   (sheeple:with-properties (projects) projects
     (loop for project across projects
-          do (show-project project))))
+          do (ensure-parent project =project=)
+          do (print-on-own-line (show project)))))

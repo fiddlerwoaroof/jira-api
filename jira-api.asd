@@ -14,5 +14,7 @@
   :serial t
   :components ((:file "package")
                (:file "prompt")
+               (:file "api-handler")
+               (:file "sheeple-protos")
                (:file "jira-api")))
 

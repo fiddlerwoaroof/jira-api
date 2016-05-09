@@ -58,12 +58,14 @@
       ((getopt :long-name "help") (help))
       ((getopt :long-name "version") (format t "~&~a~%" *version*))
       ((getopt :long-name "get-issue") (let ((options (remainder)))
-                                         (jira-api::show-issue
-                                           (jira-api::json2sheeple
-                                             (jira-api::get-issue *auth*
-                                                                  (format nil "~a-~a"
-                                                                          (car options)
-                                                                          (cadr options)))))))
+                                         (format t "~&~a~&"
+                                                 (jira-api::show
+                                                   (jira-api::json2sheeple
+                                                     (jira-api::get-issue *auth*
+                                                                          (format nil "~a-~a"
+                                                                                  (car options)
+                                                                                  (cadr options)))
+                                                     jira-api::=issue=)))))
       ((getopt :long-name "get-issues")
        (let ((options (remainder)))
          (let ((issues (jira-api::json2sheeple (jira-api::get-issues *auth*))))
