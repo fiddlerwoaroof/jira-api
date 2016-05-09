@@ -6,7 +6,7 @@
   (apply #'format stream prompt args)
   (force-output stream)
   (read-line stream nil :done))
-(trace prompt-for-line)
+;(trace prompt-for-line)
 
 (defun prompt-for-lines (stream initial-prompt continuation-prompt &rest args)
   "Not finished ... see :description below"
@@ -47,3 +47,10 @@
         do (vector-push-extend trim-line lines)
         finally (return (string-join lines #\newline))))
 
+(defmethod prompt ((field-name (eql :jira-account)) &optional (stream *prompt-stream*))
+  (prompt-for-line stream "JIRA Subdomain? "))
+
+(defmethod prompt ((field-name (eql :creds)) &optional (stream *prompt-stream*))
+  (let ((username (prompt-for-line stream "Username? "))
+        (password (prompt-for-line stream "Password (visible)? ")))
+    (list username password)))

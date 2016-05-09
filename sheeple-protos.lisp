@@ -36,6 +36,34 @@
   (declare (ignore args))
   (format nil "~a" (name status)))
 
+(defun show-description (description)
+  (pprint-logical-block (*standard-output* (mapcar (compose 'tokens 'trim-whitespace)
+                                                 (lines description)))
+    (pprint-indent :block 4 *standard-output*)
+    (pprint-newline :mandatory *standard-output*)
+    (loop
+      (pprint-exit-if-list-exhausted)
+      (let ((line (pprint-pop)))
+        (pprint-logical-block (*standard-output* line)
+          (loop
+            (princ (pprint-pop) *standard-output*)
+            (pprint-exit-if-list-exhausted)
+            (princ #\space *standard-output*)
+            (pprint-indent :block 3)
+            (pprint-newline :fill *standard-output*)))
+        (pprint-newline :mandatory *standard-output*)))))
+
+(defun show-summary (summary)
+  (pprint-logical-block (*standard-output* (funcall (compose 'tokens 'trim-whitespace) summary))
+    (pprint-indent :block 8 *standard-output*)
+    (pprint-exit-if-list-exhausted)
+    (format *standard-output* "~4tSummary: ")
+    (loop
+      (princ (pprint-pop))
+      (pprint-exit-if-list-exhausted)
+      (pprint-newline :fill *standard-output*)
+      (princ #\space))))
+
 (sheeple:defreply show ((issue =issue=) &rest args)
   (declare (ignorable args))
   (with-output-to-string (*standard-output*)
@@ -68,7 +96,6 @@
 (sheeple:defproto =issuetype= () (description name))
 
 (sheeple:defreply sheeple:shared-init :after ((project =project=) &key)
-                  (declare (optimize (debug 3)))
   (with-accessors ((issuetypes issuetypes)) project
     (when issuetypes
       (map nil

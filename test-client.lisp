@@ -12,7 +12,7 @@
   (:use #:cl #:serapeum #:alexandria #:fw.lu #:jira-api.cli #:jira-api #:net.didierverna.clon))
 
 (in-package #:jira-api.client)
-(defparameter *version* (format nil "0.1-init")) 
+(defparameter *version* (format nil "0.1-init"))
 
 (defparameter *endpoint-template* "https://~a.atlassian.net/rest/api/2/")
 
@@ -30,8 +30,9 @@
          (flag :short-name "i"
                :long-name "get-issue"
                :description "show an issue")
-         (flag :short-name "pi" :long-name "post-issue"
-               :description "post and issue"))
+         ;(flag :short-name "pi" :long-name "post-issue"
+         ;      :description "post and issue")
+         )
   (group (:header "JIRA options")
          (stropt :long-name "jira-account"
                  :description "The jira account to use."
@@ -41,22 +42,37 @@
          (stropt :short-name "s" :long-name "status"
                  :description "Only show issues with a certain status"))
   (group (:header "Other options")
+         (flag :short-name "dc" :long-name "dump-configuration"
+               :description "Dump the current configuration")
+         (flag :short-name "g" :long-name "configure"
+               :description "Configure the default values")
          (flag :short-name "h" :long-name "help"
-               :description "Show this help") 
+               :description "Show this help")
          (flag :short-name "v" :long-name "version"
                :description "Show the program version")))
 
 (defvar *auth*)
 
+(defun dump-configuration ()
+  (format t "~&~s~&"
+          (hash-table-alist
+            (ubiquitous:value :jira))))
+
 (defun main ()
-  (ubiquitous:restore :jira-api) 
+  (ubiquitous:restore :jira-api)
   (setf *auth* (ubiquitous:value :jira :creds))
   (make-context)
-  
+
   (let ((jira-api::*endpoint* (format nil *endpoint-template* (getopt :long-name "jira-account"))))
     (cond
       ((getopt :long-name "help") (help))
       ((getopt :long-name "version") (format t "~&~a~%" *version*))
+      ((getopt :long-name "dump-configuration") (dump-configuration))
+      ((getopt :long-name "configure") (let ((creds (prompt :creds))
+                                             (account (prompt :jira-account)))
+                                         (setf (ubiquitous:value :jira :creds) creds)
+                                         (setf (ubiquitous:value :jira :account) account)
+                                         (dump-configuration)))
       ((getopt :long-name "get-issue") (let ((options (remainder)))
                                          (format t "~&~a~&"
                                                  (jira-api::show
@@ -70,7 +86,7 @@
        (let ((options (remainder)))
          (let ((issues (jira-api::json2sheeple (jira-api::get-issues *auth*))))
            (alexandria:if-let ((status (getopt :long-name "status")))
-             (setf issues 
+             (setf issues
                    (sheeple:defobject ()
                                       ((jira-api::issues
                                          (apply 'vector
@@ -81,9 +97,6 @@
                                              (jira-api::json2sheeple
                                                (jira-api::get-projects *auth*))))
       ((getopt :long-name "post-issue") (yason:encode (jira-api::read-issue)))
-      (t   (do-cmdline-options (option name value source)
-                               (print (list option name value source)))
-           (terpri)
-           (exit)))))
+      (t  (help) (exit)))))
 
 (dump "jira-client" main)
