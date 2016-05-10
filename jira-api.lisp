@@ -1,6 +1,4 @@
 ;;;; jira-api.lisp
-(declaim (optimize (debug 3)))
-
 (in-package #:jira-api)
 
 (defun get-issues (auth)
@@ -62,38 +60,11 @@
 (defun show-labels (labels)
   (format t "~&~4tLabels: ~{~a~}~%" (coerce labels 'list)))
 
-(defun show-description (description)
-  (pprint-logical-block (*standard-output* (mapcar (compose 'tokens 'trim-whitespace)
-                                                 (lines description)))
-    (pprint-indent :block 4 *standard-output*)
-    (pprint-newline :mandatory *standard-output*)
-    (loop
-      (pprint-exit-if-list-exhausted)
-      (let ((line (pprint-pop)))
-        (pprint-logical-block (*standard-output* line)
-          (loop
-            (princ (pprint-pop) *standard-output*)
-            (pprint-exit-if-list-exhausted)
-            (princ #\space *standard-output*)
-            (pprint-indent :block 3)
-            (pprint-newline :fill *standard-output*)))
-        (pprint-newline :mandatory *standard-output*)))))
-
-(defun show-summary (summary)
-  (pprint-logical-block (*standard-output* (funcall (compose 'tokens 'trim-whitespace) summary))
-    (pprint-indent :block 8 *standard-output*)
-    (pprint-exit-if-list-exhausted)
-    (format *standard-output* "~4tSummary: ")
-    (loop
-      (princ (pprint-pop))
-      (pprint-exit-if-list-exhausted)
-      (pprint-newline :fill *standard-output*)
-      (princ #\space))))
-
 (defun classify-issues (sheeple-issues &optional (classify-by '(status name)))
   (sheeple:with-properties (issues) sheeple-issues
     (loop with classes = (make-hash-table :test 'equalp)
           for issue across issues
+          do (ensure-parent issue =issue=)
           do (loop for classification in classify-by
                    for thing = (sheeple:property-value (fields issue) classification)
                        then (sheeple:property-value thing classification)
@@ -105,7 +76,13 @@
     (let* ((fields (fields issue))
            (status (name (status fields)))
            (summary (summary fields)))
-      (format t "~&~a ~a (~a)~%" self key status)
+
+      (format t "~&~a (~a) <~a>~%"
+              key
+              status 
+              (puri:merge-uris (format nil "/browse/~a" (key issue))
+                               *hostname*))
+
       (show-summary summary)
       (fresh-line))))
 

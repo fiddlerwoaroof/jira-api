@@ -19,6 +19,12 @@
   (sheeple:with-properties (labels) fields
     labels))
 
+(sheeple:defproto =comment= () (self id author body))
+
+(sheeple:defreply sheeple:shared-init :after ((comment =comment=) &key)
+  (with-accessors ((author author)) issue
+      (ensure-parent author =person= :err-if-nil nil)))
+
 (sheeple:defreply sheeple:shared-init :after ((issue =issue=) &key)
   (with-accessors ((fields fields)) issue
     (when fields
@@ -26,7 +32,12 @@
       (ensure-parent (status fields) =status=)
       (ensure-parent (reporter fields) =person=)
       (ensure-parent (creator fields) =person=)
-      (ensure-parent (assignee fields) =person= :err-if-nil nil))))
+      (ensure-parent (assignee fields) =person= :err-if-nil nil)
+      (when (sheeple:direct-property-p issue 'comment) 
+        (sheeple:with-properties (comment) issue
+          (sheeple:with-properties (comments) comment
+            (map 'nil (lambda (comment) (ensure-parent comment =comment=))
+                 comments)))))))
 
 (sheeple:defreply show ((person =person=) &rest args)
   (declare (ignore args))
@@ -75,7 +86,8 @@
         (format t "~a (~a) <~a>~%"
                 (key issue)
                 (show status)
-                (self issue))
+                (princ-to-string (puri:merge-uris (format nil "/browse/~a" (key issue))
+                                                  *hostname*)))
 
         (show-summary summary)
 

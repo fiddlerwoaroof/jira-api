@@ -63,40 +63,40 @@
   (setf *auth* (ubiquitous:value :jira :creds))
   (make-context)
 
-  (let ((jira-api::*endpoint* (format nil *endpoint-template* (getopt :long-name "jira-account"))))
-    (cond
-      ((getopt :long-name "help") (help))
-      ((getopt :long-name "version") (format t "~&~a~%" *version*))
-      ((getopt :long-name "dump-configuration") (dump-configuration))
-      ((getopt :long-name "configure") (let ((creds (prompt :creds))
-                                             (account (prompt :jira-account)))
-                                         (setf (ubiquitous:value :jira :creds) creds)
-                                         (setf (ubiquitous:value :jira :account) account)
-                                         (dump-configuration)))
-      ((getopt :long-name "get-issue") (let ((options (remainder)))
-                                         (format t "~&~a~&"
-                                                 (jira-api::show
-                                                   (jira-api::json2sheeple
-                                                     (jira-api::get-issue *auth*
-                                                                          (format nil "~a-~a"
-                                                                                  (car options)
-                                                                                  (cadr options)))
-                                                     jira-api::=issue=)))))
-      ((getopt :long-name "get-issues")
-       (let ((options (remainder)))
-         (let ((issues (jira-api::json2sheeple (jira-api::get-issues *auth*))))
-           (alexandria:if-let ((status (getopt :long-name "status")))
-             (setf issues
-                   (sheeple:defobject ()
-                                      ((jira-api::issues
-                                         (apply 'vector
-                                                (gethash status
-                                                         (jira-api::classify-issues issues))))))))
-           (jira-api::show-issues issues))))
-      ((getopt :long-name "list-projects") (jira-api::show-projects
-                                             (jira-api::json2sheeple
-                                               (jira-api::get-projects *auth*))))
-      ((getopt :long-name "post-issue") (yason:encode (jira-api::read-issue)))
-      (t  (help) (exit)))))
+  (jira-api::update-hostname (getopt :long-name "jira-account"))
+  (cond
+    ((getopt :long-name "help") (help))
+    ((getopt :long-name "version") (format t "~&~a~%" *version*))
+    ((getopt :long-name "dump-configuration") (dump-configuration))
+    ((getopt :long-name "configure") (let ((creds (prompt :creds))
+                                           (account (prompt :jira-account)))
+                                       (setf (ubiquitous:value :jira :creds) creds)
+                                       (setf (ubiquitous:value :jira :account) account)
+                                       (dump-configuration)))
+    ((getopt :long-name "get-issue") (let ((options (remainder)))
+                                       (format t "~&~a~&"
+                                               (jira-api::show
+                                                 (jira-api::json2sheeple
+                                                   (jira-api::get-issue *auth*
+                                                                        (format nil "~a-~a"
+                                                                                (car options)
+                                                                                (cadr options)))
+                                                   jira-api::=issue=)))))
+    ((getopt :long-name "get-issues")
+     (let ((options (remainder)))
+       (let ((issues (jira-api::json2sheeple (jira-api::get-issues *auth*))))
+         (alexandria:if-let ((status (getopt :long-name "status")))
+           (setf issues
+                 (sheeple:defobject ()
+                                    ((jira-api::issues
+                                       (apply 'vector
+                                              (gethash status
+                                                       (jira-api::classify-issues issues))))))))
+         (jira-api::show-issues issues))))
+    ((getopt :long-name "list-projects") (jira-api::show-projects
+                                           (jira-api::json2sheeple
+                                             (jira-api::get-projects *auth*))))
+    ((getopt :long-name "post-issue") (yason:encode (jira-api::read-issue)))
+    (t  (help) (exit))))
 
 (dump "jira-client" main)
