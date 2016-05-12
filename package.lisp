@@ -8,5 +8,6 @@
            #:prompt))
 
 (defpackage #:jira-api
+  (:shadow #:comment)
   (:use #:cl #:serapeum #:alexandria #:fw.lu #:jira-api.cli))
 

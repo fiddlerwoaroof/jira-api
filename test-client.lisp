@@ -39,6 +39,8 @@
                  :argument-name "URL-SUBDOMAIN"
                  :default-value (ubiquitous:value :jira :account)))
   (group (:header "Filtering Issues")
+         (flag :short-name "c" :long-name "with-comments"
+                 :description "Show the issue's comments") 
          (stropt :short-name "s" :long-name "status"
                  :description "Only show issues with a certain status"))
   (group (:header "Other options")
@@ -81,7 +83,8 @@
                                                                         (format nil "~a-~a"
                                                                                 (car options)
                                                                                 (cadr options)))
-                                                   jira-api::=issue=)))))
+                                                   jira-api::=issue=)
+                                                 (getopt :long-name "with-comments")))))
     ((getopt :long-name "get-issues")
      (let ((options (remainder)))
        (let ((issues (jira-api::json2sheeple (jira-api::get-issues *auth*))))

@@ -12,7 +12,7 @@
 (sheeple:defproto =status= () (name))
 (sheeple:defproto =person= () (displayname emailaddress))
 (sheeple:defproto =issue= () (fields key id self))
-(sheeple:defproto =fields= () (summary description reporter creator assignee status))
+(sheeple:defproto =fields= () (summary description reporter creator assignee status comment))
 (sheeple:defmessage show (object &rest args))
 (sheeple:defmessage fields-labels (fields))
 (sheeple:defreply fields-labels ((fields =fields=))
@@ -22,7 +22,7 @@
 (sheeple:defproto =comment= () (self id author body))
 
 (sheeple:defreply sheeple:shared-init :after ((comment =comment=) &key)
-  (with-accessors ((author author)) issue
+  (with-accessors ((author author)) comment
       (ensure-parent author =person= :err-if-nil nil)))
 
 (sheeple:defreply sheeple:shared-init :after ((issue =issue=) &key)
@@ -33,11 +33,10 @@
       (ensure-parent (reporter fields) =person=)
       (ensure-parent (creator fields) =person=)
       (ensure-parent (assignee fields) =person= :err-if-nil nil)
-      (when (sheeple:direct-property-p issue 'comment) 
-        (sheeple:with-properties (comment) issue
-          (sheeple:with-properties (comments) comment
-            (map 'nil (lambda (comment) (ensure-parent comment =comment=))
-                 comments)))))))
+      (sheeple:with-properties (comment) fields
+        (sheeple:with-properties (comments) comment
+          (map 'nil (lambda (comment) (ensure-parent comment =comment=))
+               comments))))))
 
 (sheeple:defreply show ((person =person=) &rest args)
   (declare (ignore args))
@@ -78,7 +77,7 @@
 (sheeple:defreply show ((issue =issue=) &rest args)
   (declare (ignorable args))
   (with-output-to-string (*standard-output*)
-    (if-let ((fields (fields issue)))
+    (when-let ((fields (fields issue)))
       (with-accessors ((status status) (summary summary) (reporter reporter)
                                        (creator creator) (assignee assignee)
                                        (labels fields-labels)) fields
@@ -101,6 +100,19 @@
 
         (when (description fields)
           (show-description (description fields))))
+
+      ; The head of the arguments determines whether or not
+      ; we show the comments
+      (when (and (car args))
+        (if-let ((comment (comment fields)))
+          (sheeple:with-properties (comments) comment
+            (loop for comment across comments
+                  do (format t "~&~a:~% ~<   ~@;~{~{~a~^ ~:_~}~2%~}~:>~&"
+                             (show (author comment))
+                             (list (map 'list #'tokens
+                                        (split-sequence #\newline
+                                                        (body comment)))))))))
+
       (fresh-line))))
 
 (sheeple:defproto =project= () (name key issuetypes))
