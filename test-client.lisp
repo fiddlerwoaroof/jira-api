@@ -40,7 +40,7 @@
                  :default-value (ubiquitous:value :jira :account)))
   (group (:header "Filtering Issues")
          (flag :short-name "c" :long-name "with-comments"
-                 :description "Show the issue's comments") 
+               :description "Show the issue's comments") 
          (stropt :short-name "s" :long-name "status"
                  :description "Only show issues with a certain status"))
   (group (:header "Other options")

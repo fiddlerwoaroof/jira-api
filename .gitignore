@@ -1,1 +1,4 @@
+*.fasl
+*.FASL
 jira-client
+*.lisp-temp
