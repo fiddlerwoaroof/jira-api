@@ -1,12 +1,11 @@
-(in-package #:jira-api) 
+(in-package #:jira-api)
 
-; curl -u user:password https://atomampd.atlassian.net/rest/api/2/issue/ATOMOS-212 | jq .
 (defparameter *hostname* "https://atomampd.atlassian.net")
 (defparameter *endpoint* (princ-to-string (puri:merge-uris *hostname* "/rest/api/2/")))
 (defparameter *agile-endpoint* (princ-to-string (puri:merge-uris *hostname* "/rest/agile/1.0/")))
 
-(defun update-hostname ()
-  (setf *hostname* "https://jira.cnvrmedia.net")
+(defun update-hostname (base)
+  (setf *hostname* (format nil "https://~a" base))
   (setf *endpoint* (princ-to-string (puri:merge-uris "/rest/api/2/" *hostname*)))
   (setf *agile-endpoint* (princ-to-string (puri:merge-uris *hostname* "/rest/agile/1.0/"))))
 
@@ -59,5 +58,3 @@
                          :content post-data
                          :basic-authorization auth
                          :want-stream t)))
-
-
