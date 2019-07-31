@@ -1,12 +1,30 @@
 ;;;; jira-api.lisp
 (in-package #:jira-api)
 
-(defun get-issues (auth)
-  (api-get-call auth "search"))
+(defun get-filter (auth filter &rest r &key (expand "subscriptions[:-5]"))
+  (declare (ignore expand))
+  (apply 'api-get-call auth (format nil "filter/~d" filter) r))
+
+(defun get-issues (auth &key jql)
+  (if jql
+      (api-get-call auth "search" "jql" jql)
+      (api-get-call auth "search")))
+
+(defmacro jql (auth &body jql)
+  `(api-get-call ,auth "search" "jql"
+                 ,(apply #'serapeum:concat jql)))
+
+(defun run-filter (auth filter)
+  (let ((jql (gethash "jql" (yason:parse (get-filter auth filter)))))
+    (get-issues auth :jql jql)))
 
 (defun get-issue (auth key &rest params &key expand)
   (declare (ignore expand))
   (apply 'api-get-call auth (format nil "issue/~a" key) params))
+
+(defun get-board-issues (auth key &rest params &key expand)
+  (declare (ignore expand))
+  (apply 'api-get-call auth (format nil "board/~a/issue" key) params))
 
 (defun get-projects (auth)
   (api-get-call auth "issue/createmeta"))
@@ -71,20 +89,41 @@
                    finally (push issue (gethash thing classes)))
           finally (return classes))))
 
-(defun show-issue-short (issue)
+(defun status-to-num (status)
+  (string-case (string-downcase status)
+    ("open" 0)
+    ("in progress" 1)
+    ("needs qr" 2)
+    ("needs demo" 3)
+    ("closed" 4)
+    (t 5)))
+
+(defun sort-issues-by-status (sheeple-issues)
+  (prog1 sheeple-issues
+    (sheeple:with-properties (issues) sheeple-issues
+      (setf issues
+            (sort issues #'< :key (op (status-to-num (name (status (fields _))))))))))
+
+(defun show-issue-short (issue &optional (stream t))
   (sheeple:with-properties (key self) issue
     (let* ((fields (fields issue))
            (status (name (status fields)))
            (summary (summary fields)))
 
-      (format t "~&~a (~a) <~a>~%"
+      (format stream "~&~a (~a) <~a>~%"
               key
               status 
               (puri:merge-uris (format nil "/browse/~a" (key issue))
                                *hostname*))
 
-      (show-summary summary)
-      (fresh-line))))
+      (show-summary summary stream)
+      (fresh-line stream))))
+
+(defun map-issues (fun sheeple-issues)
+  (sheeple:with-properties (issues) sheeple-issues
+    (loop for issue across issues
+          do (ensure-parent issue =issue=)
+          collect (funcall fun issue))))
 
 (defun show-issues (sheeple-issues)
   (sheeple:with-properties (issues) sheeple-issues
@@ -100,3 +139,17 @@
     (loop for project across projects
           do (ensure-parent project =project=)
           do (print-on-own-line (show project)))))
+
+(defun get-points-for-issues (count start)
+  (loop with end = (+ count start)
+     for batch-start from start to end by 50
+     for batch-count = (min (- end batch-start)
+                            50)
+     append (map 'list #'points
+                 (issues
+                  (json2sheeple
+                   (get-issues *auth* :jql
+                               (format nil "issueKey in (~{CJPM-~a~^, ~})"
+                                       (alexandria:iota batch-count
+                                                        :start batch-start)))
+                   =issues=)))))

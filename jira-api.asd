@@ -4,7 +4,7 @@
   :description "Describe jira-api here"
   :author "Your Name <your.name@example.com>"
   :license "Specify license here"
-  :depends-on (#:fwoar.lisputils
+  :depends-on (#:fwoar-lisputils
                #:alexandria
                #:serapeum
                #:drakma

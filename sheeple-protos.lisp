@@ -13,6 +13,7 @@
 (sheeple:defproto =person= () (displayname emailaddress))
 (sheeple:defproto =issue= () (fields key id self))
 (sheeple:defproto =fields= () (summary description reporter creator assignee status comment))
+(sheeple:defproto =issues= () (issues))
 (sheeple:defmessage show (object &rest args))
 (sheeple:defmessage fields-labels (fields))
 (sheeple:defreply fields-labels ((fields =fields=))
@@ -20,6 +21,15 @@
     labels))
 
 (sheeple:defproto =comment= () (self id author body))
+
+(sheeple:defmessage points (issue))
+(sheeple:defreply points ((issue =issue=))
+  (sheeple:property-value (fields issue)
+                          'customfield_10002))
+
+(sheeple:defreply sheeple:shared-init ((issues =issues=) &key)
+  (map nil (op (ensure-parent _ =issue=))
+       (issues issues)))
 
 (sheeple:defreply sheeple:shared-init :after ((comment =comment=) &key)
   (with-accessors ((author author)) comment
@@ -30,13 +40,14 @@
     (when fields
       (ensure-parent fields =fields=)
       (ensure-parent (status fields) =status=)
-      (ensure-parent (reporter fields) =person=)
-      (ensure-parent (creator fields) =person=)
+      (ensure-parent (reporter fields) =person= :err-if-nil nil)
+      (ensure-parent (creator fields) =person= :err-if-nil nil)
       (ensure-parent (assignee fields) =person= :err-if-nil nil)
       (sheeple:with-properties (comment) fields
-        (sheeple:with-properties (comments) comment
-          (map 'nil (lambda (comment) (ensure-parent comment =comment=))
-               comments))))))
+        (when comment
+          (sheeple:with-properties (comments) comment
+            (map 'nil (lambda (comment) (ensure-parent comment =comment=))
+                 comments)))))))
 
 (sheeple:defreply show ((person =person=) &rest args)
   (declare (ignore args))
@@ -63,16 +74,16 @@
             (pprint-newline :fill *standard-output*)))
         (pprint-newline :mandatory *standard-output*)))))
 
-(defun show-summary (summary)
-  (pprint-logical-block (*standard-output* (funcall (compose 'tokens 'trim-whitespace) summary))
+(defun show-summary (summary &optional (stream *standard-output*))
+  (pprint-logical-block (stream (funcall (compose 'tokens 'trim-whitespace) summary))
     (pprint-indent :block 8 *standard-output*)
     (pprint-exit-if-list-exhausted)
-    (format *standard-output* "~4tSummary: ")
+    (format stream "~4tSummary: ")
     (loop
-      (princ (pprint-pop))
+      (princ (pprint-pop) stream)
       (pprint-exit-if-list-exhausted)
-      (pprint-newline :fill *standard-output*)
-      (princ #\space))))
+      (pprint-newline :fill stream)
+      (princ #\space stream))))
 
 (sheeple:defreply show ((issue =issue=) &rest args)
   (declare (ignorable args))
@@ -149,20 +160,20 @@
 
 (defun json2sheeple (json &optional parent)
   (labels
-    ((handle-parsed (parsed-json)
-       (typecase parsed-json
-         (vector-of-objects (map 'vector #'handle-parsed parsed-json))
-         (hash-table
-           (let ((result (sheeple:object)))
-             (loop for json-prop being the hash-keys of parsed-json using (hash-value json-value)
-                   do (setf (sheeple:property-value result
-                                                    (intern (string-upcase json-prop) :jira-api))
-                            (typecase json-value
-                              (hash-table (handle-parsed json-value))
-                              (vector-of-objects (map 'vector #'handle-parsed json-value))
-                              (t json-value)))
-                   finally (return result))))
-         (t parsed-json))))
+      ((handle-parsed (parsed-json)
+         (typecase parsed-json
+           (vector-of-objects (map 'vector #'handle-parsed parsed-json))
+           (hash-table
+            (let ((result (sheeple:object)))
+              (loop for json-prop being the hash-keys of parsed-json using (hash-value json-value)
+                 do (setf (sheeple:property-value result
+                                                  (intern (string-upcase json-prop) :jira-api))
+                          (typecase json-value
+                            (hash-table (handle-parsed json-value))
+                            (vector-of-objects (map 'vector #'handle-parsed json-value))
+                            (t json-value)))
+                 finally (return result))))
+           (t parsed-json))))
     (let* ((yason:*parse-json-arrays-as-vectors* t)
            (result (handle-parsed (yason:parse json))))
       (when parent

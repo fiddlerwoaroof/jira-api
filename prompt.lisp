@@ -6,7 +6,7 @@
   (apply #'format stream prompt args)
   (force-output stream)
   (read-line stream nil :done))
-;(trace prompt-for-line)
+;;(trace prompt-for-line)
 
 (defun prompt-for-lines (stream initial-prompt continuation-prompt &rest args)
   "Not finished ... see :description below"
